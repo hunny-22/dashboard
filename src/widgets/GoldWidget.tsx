@@ -90,14 +90,16 @@ function createDailyRange(days, latestPrice) {
     date.setHours(0, 0, 0, 0);
     date.setDate(date.getDate() - i);
 
+    const index = days - 1 - i;
+
     const progress =
-      (days - 1 - i) / Math.max(days - 1, 1);
+      index / Math.max(days - 1, 1);
 
     const wave =
-      Math.sin((days - 1 - i) * 0.9) * 120;
+      Math.sin(index * 0.9) * 120;
 
     result.push({
-      label: formatDateLabel(date),
+      label: String(date.getDate()),
       date: date.toISOString().slice(0, 10),
       price: Math.round(
         latestPrice * (0.985 + progress * 0.015) + wave
@@ -115,17 +117,15 @@ function createMonthlyRange(latestPrice) {
 
   const year = today.getFullYear();
   const month = today.getMonth();
-
-  const daysInMonth =
-    new Date(year, month + 1, 0).getDate();
+  const todayDate = today.getDate();
 
   const result = [];
 
-  for (let day = 1; day <= daysInMonth; day++) {
+  for (let day = 1; day <= todayDate; day++) {
     const date = new Date(year, month, day);
 
     const progress =
-      (day - 1) / Math.max(daysInMonth - 1, 1);
+      (day - 1) / Math.max(todayDate - 1, 1);
 
     const wave =
       Math.sin(day * 0.45) * 160;
@@ -139,11 +139,7 @@ function createMonthlyRange(latestPrice) {
     });
   }
 
-  const todayIndex = today.getDate() - 1;
-
-  if (result[todayIndex]) {
-    result[todayIndex].price = latestPrice;
-  }
+  result[result.length - 1].price = latestPrice;
 
   return result;
 }
