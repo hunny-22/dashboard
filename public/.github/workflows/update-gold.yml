@@ -1,0 +1,39 @@
+name: Update Gold Price
+
+on:
+  schedule:
+    # 日本時間 9:35
+    - cron: "35 0 * * 1-5"
+
+    # 日本時間 14:05
+    - cron: "5 5 * * 1-5"
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-gold:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Update gold data
+        run: npm run update:gold
+
+      - name: Commit updated gold.json
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update gold price data"
+          file_pattern: public/gold.json

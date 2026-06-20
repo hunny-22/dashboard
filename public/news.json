@@ -1,0 +1,82 @@
+[
+  {
+    "title": "AI関連サービスの活用がさらに広がる",
+    "summary": "企業や個人向けのAI活用が進み、業務支援や情報整理の分野で導入が増えています。",
+    "imageUrl": "",
+    "articleUrl": "https://example.com/news1",
+    "source": "Tech",
+    "publishedAt": "21:00"
+  },
+  {
+    "title": "半導体市場に回復の兆し",
+    "summary": "生成AIやデータセンター需要を背景に、半導体関連企業への注目が高まっています。",
+    "imageUrl": "",
+    "articleUrl": "https://example.com/news2",
+    "source": "Business",
+    "publishedAt": "21:10"
+  },
+  {
+    "title": "金価格、堅調な推移",
+    "summary": "安全資産としての需要が続き、金相場は高値圏で推移しています。",
+    "imageUrl": "",
+    "articleUrl": "https://example.com/news3",
+    "source": "Market",
+    "publishedAt": "21:20"
+  },
+  {
+    "title": "スマートホーム機器のMatter対応が拡大",
+    "summary": "複数メーカー間の連携を重視したスマートホーム環境への移行が進んでいます。",
+    "imageUrl": "",
+    "articleUrl": "https://example.com/news4",
+    "source": "IoT",
+    "publishedAt": "21:30"
+  },
+  {
+    "title": "小型ディスプレイ需要が増加",
+    "summary": "常時表示用やサブモニター用途として、小型ディスプレイの活用が広がっています。",
+    "imageUrl": "",
+    "articleUrl": "https://example.com/news5",
+    "source": "Gadget",
+    "publishedAt": "21:40"
+  },
+  {
+    "title": "国内の天気、広い範囲で変わりやすく",
+    "summary": "地域によって雨や晴れ間が入り混じり、こまめな天気確認が必要になりそうです。",
+    "imageUrl": "",
+    "articleUrl": "https://example.com/news6",
+    "source": "Weather",
+    "publishedAt": "21:50"
+  },
+  {
+    "title": "宇宙観測データの解析にAI活用",
+    "summary": "大量の観測データから特徴を抽出するため、AI技術の活用が進んでいます。",
+    "imageUrl": "",
+    "articleUrl": "https://example.com/news7",
+    "source": "Science",
+    "publishedAt": "22:00"
+  },
+  {
+    "title": "為替市場、方向感を探る展開",
+    "summary": "金融政策や経済指標への見方が交錯し、為替相場は慎重な動きとなっています。",
+    "imageUrl": "",
+    "articleUrl": "https://example.com/news8",
+    "source": "Finance",
+    "publishedAt": "22:10"
+  },
+  {
+    "title": "次世代タブレットの活用方法に注目",
+    "summary": "メイン端末だけでなく、情報表示や操作パネルとしての利用も増えています。",
+    "imageUrl": "",
+    "articleUrl": "https://example.com/news9",
+    "source": "Device",
+    "publishedAt": "22:20"
+  },
+  {
+    "title": "個人用ダッシュボード需要が拡大",
+    "summary": "天気、ニュース、相場、予定をまとめて表示する個人向け画面づくりに注目が集まっています。",
+    "imageUrl": "",
+    "articleUrl": "https://example.com/news10",
+    "source": "Dashboard",
+    "publishedAt": "22:30"
+  }
+]
