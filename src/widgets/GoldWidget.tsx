@@ -297,8 +297,8 @@ const res = await fetch(
       <div style={chartAreaStyle}>
         {history.length > 0 ? (
           <ResponsiveContainer
-            width="100%"
-            height="100%"
+            width="99%"
+            height="99%"
           >
             <LineChart
               data={history}
@@ -525,8 +525,11 @@ const chartHeaderStyle = {
 };
 
 const chartAreaStyle = {
+  width: "100%",
+  height: "100%",
   flex: 1,
-  minHeight: "110px",
+  minWidth: 0,
+  minHeight: "160px",
   marginTop: "4px",
   borderRadius: "12px",
   background:
