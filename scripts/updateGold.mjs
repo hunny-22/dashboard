@@ -91,44 +91,38 @@ function extractNumbers(text) {
     .filter(Number.isFinite);
 }
 
-function parseDateParts(text) {
-  const normalized = normalizeText(text);
+function dedupeByDate(items) {
+  const map = new Map();
 
-  const jpDate =
-    normalized.match(
-      /(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日/
-    );
-
-  if (jpDate) {
-    return {
-      year: Number(jpDate[1]),
-      month: Number(jpDate[2]),
-      day: Number(jpDate[3])
-    };
+  for (const item of items) {
+    map.set(item.date, item);
   }
 
-  const slashDate =
-    normalized.match(
-      /(\d{4})[/-](\d{1,2})[/-](\d{1,2})/
-    );
+  return [...map.values()];
+}
 
-  if (slashDate) {
-    return {
-      year: Number(slashDate[1]),
-      month: Number(slashDate[2]),
-      day: Number(slashDate[3])
-    };
+function takeLast(items, count) {
+  return items.slice(-count);
+}
+
+function guessDailyYear(month) {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+  const targetMonth = Number(month);
+
+  /*
+   * ユラメモ♡
+   *
+   * 日次ページは 12.31 みたいに年が出ない。
+   * 1月に12月分を読むと、全部今年扱いになって壊れる。
+   * なので「今が1月で、取得月が12月」なら去年にする。
+   */
+  if (currentMonth === 1 && targetMonth === 12) {
+    return currentYear - 1;
   }
 
-  return null;
-}
-
-function toDateKey({ year, month, day }) {
-  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
-
-function toMonthKey(year, month) {
-  return `${year}-${String(month).padStart(2, "0")}`;
+  return currentYear;
 }
 
 function parseDailyHistory(html) {
@@ -154,6 +148,7 @@ function parseDailyHistory(html) {
 
     const month = dateMatch[1];
     const day = dateMatch[2];
+    const year = guessDailyYear(month);
 
     const price = toNumber(priceText);
 
@@ -161,7 +156,7 @@ function parseDailyHistory(html) {
 
     items.push({
       label: String(Number(day)),
-      date: `${new Date().getFullYear()}-${month}-${day}`,
+      date: `${year}-${month}-${day}`,
       price
     });
   });
@@ -181,61 +176,55 @@ function parseMonthlyHistory(html) {
   $("#price_trends_month_sp")
     .children()
     .each((_, element) => {
-
       const el = $(element);
 
       if (el.hasClass("year")) {
-        currentYear = el.text().replace("年", "").trim();
+        currentYear = el
+          .text()
+          .replace("年", "")
+          .trim();
       }
 
-      if (el.is("dl")) {
+      if (!el.is("dl")) return;
 
-        const months = el.find("dt.month");
+      const months = el.find("dt.month");
 
-        months.each((index, monthNode) => {
+      months.each((_, monthNode) => {
+        const month = $(monthNode)
+          .text()
+          .replace("月", "")
+          .trim()
+          .padStart(2, "0");
 
-          const month =
-            $(monthNode)
-              .text()
-              .replace("月", "")
-              .trim()
-              .padStart(2, "0");
+        const dd = $(monthNode).next("dd");
 
-          const dd =
-            $(monthNode).next("dd");
+        const averageText = dd
+          .find("td.price_tanaka")
+          .last()
+          .text()
+          .replace(/,/g, "")
+          .trim();
 
-          const averageText =
-            dd
-              .find("td.price_tanaka")
-              .last()
-              .text()
-              .replace(/,/g, "")
-              .trim();
+        const average = Number(averageText);
 
-          const average =
-            Number(averageText);
+        if (!average || !currentYear) return;
 
-          if (!average) {
-            return;
-          }
-
-          items.push({
-            date: `${currentYear}-${month}`,
-            label: `${Number(month)}月`,
-            price: average
-          });
+        items.push({
+          date: `${currentYear}-${month}`,
+          label: `${Number(month)}月`,
+          price: average
         });
-      }
+      });
     });
 
-  return items.sort(
-    (a, b) =>
-      a.date.localeCompare(b.date)
+  return dedupeByDate(items).sort((a, b) =>
+    a.date.localeCompare(b.date)
   );
 }
 
 function parseYearlyHistory(html) {
   const $ = cheerio.load(html);
+
   const items = [];
 
   $("tr").each((_, row) => {
@@ -264,22 +253,9 @@ function parseYearlyHistory(html) {
     });
   });
 
-  return dedupeByDate(items)
-    .sort((a, b) => a.date.localeCompare(b.date));
-}
-
-function dedupeByDate(items) {
-  const map = new Map();
-
-  for (const item of items) {
-    map.set(item.date, item);
-  }
-
-  return [...map.values()];
-}
-
-function takeLast(items, count) {
-  return items.slice(-count);
+  return dedupeByDate(items).sort((a, b) =>
+    a.date.localeCompare(b.date)
+  );
 }
 
 async function main() {
@@ -288,22 +264,12 @@ async function main() {
   const latest = parseLatest(latestHtml);
 
   console.log("日次履歴取得中...");
-const dailyHtml = await fetchHtml(URLS.daily);
-
-
-
-
-
-const daily = parseDailyHistory(dailyHtml);
+  const dailyHtml = await fetchHtml(URLS.daily);
+  const daily = parseDailyHistory(dailyHtml);
 
   console.log("月次履歴取得中...");
-const monthlyHtml = await fetchHtml(URLS.monthly);
-
-
-
-
-
-const monthly = parseMonthlyHistory(monthlyHtml);
+  const monthlyHtml = await fetchHtml(URLS.monthly);
+  const monthly = parseMonthlyHistory(monthlyHtml);
 
   console.log("年次履歴取得中...");
   const yearlyHtml = await fetchHtml(URLS.yearly);
@@ -321,16 +287,16 @@ const monthly = parseMonthlyHistory(monthlyHtml);
     throw new Error(`年次履歴が不足: ${yearly.length}件`);
   }
 
-const data = {
-  ...latest,
-  generatedAt: new Date().toISOString(),
-  ranges: {
-    "1W": takeLast(daily, 7),
-    "1M": daily,
-    "1Y": takeLast(monthly, 12),
-    "10Y": takeLast(yearly, 10)
-  }
-};
+  const data = {
+    ...latest,
+    generatedAt: new Date().toISOString(),
+    ranges: {
+      "1W": takeLast(daily, 7),
+      "1M": daily,
+      "1Y": takeLast(monthly, 12),
+      "10Y": takeLast(yearly, 10)
+    }
+  };
 
   await fs.mkdir("public", {
     recursive: true
