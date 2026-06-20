@@ -118,9 +118,16 @@ export default function GoldWidget() {
          * 戻ってきた瞬間は保存済みデータを表示。
          * その裏で新しい gold.json を取りに行く。
          */
-        const res = await fetch(
-          `/gold.json?time=${Date.now()}`
-        );
+        /*
+ * ユラメモ♡
+ *
+ * GitHub Pagesでは /dashboard/ 配下で公開される。
+ * /gold.json だと github.io 直下を見に行って404になるので、
+ * Viteの BASE_URL を使って正しい場所から読む。
+ */
+const res = await fetch(
+  `${import.meta.env.BASE_URL}gold.json?time=${Date.now()}`
+);
 
         if (!res.ok) {
           throw new Error(
