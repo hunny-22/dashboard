@@ -3,8 +3,12 @@ import * as cheerio from "cheerio";
 
 const OUT_PATH = "public/gold.json";
 
-const URL =
-  "https://gold.tanaka.co.jp/commodity/souba/";
+const URLS = {
+  latest: "https://gold.tanaka.co.jp/commodity/souba/",
+  daily: "https://gold.tanaka.co.jp/commodity/souba/d-gold_recent.php",
+  monthly: "https://gold.tanaka.co.jp/commodity/souba/m-gold.php",
+  yearly: "https://gold.tanaka.co.jp/commodity/souba/y-gold.php"
+};
 
 function toNumber(text) {
   return Number(
@@ -16,316 +20,330 @@ function toNumber(text) {
   );
 }
 
+function normalizeText(text) {
+  return String(text)
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 async function fetchHtml(url) {
   const res = await fetch(url, {
     headers: {
-      "User-Agent":
-        "Mozilla/5.0 GoldDashboard"
+      "User-Agent": "Mozilla/5.0 GoldDashboard"
     }
   });
 
   if (!res.ok) {
-    throw new Error(
-      `fetch failed ${res.status}`
-    );
+    throw new Error(`fetch failed ${res.status}: ${url}`);
   }
 
-  const buffer =
-    await res.arrayBuffer();
+  const buffer = await res.arrayBuffer();
 
-  const utf8 =
-    new TextDecoder("utf-8")
-      .decode(buffer);
+  const utf8 = new TextDecoder("utf-8").decode(buffer);
 
-  if (
-    utf8.includes("金") ||
-    utf8.includes("円")
-  ) {
+  if (utf8.includes("金") || utf8.includes("円")) {
     return utf8;
   }
 
-  return new TextDecoder(
-    "shift_jis"
-  ).decode(buffer);
+  return new TextDecoder("shift_jis").decode(buffer);
 }
 
 function parseLatest(html) {
-  const text = cheerio
-    .load(html)
-    .text()
-    .replace(/\s+/g, " ");
-
-  const match =
-    text.match(
-      /23,977\s*円\s*\(-614\s*円\)/
-    );
+  const text = normalizeText(
+    cheerio.load(html).text()
+  );
 
   const priceMatch =
     text.match(
-      /([\d,]{4,})\s*円\s*\(([+-−]?\d[\d,]*)\s*円\)/
+      /金\s*店頭小売価格.*?([\d,]+)\s*円\s*\(?([+-−]?\d[\d,]*)\s*円?\)?/
+    ) ||
+    text.match(
+      /金\s*([\d,]+)\s*円\s*\(?([+-−]?\d[\d,]*)\s*円?\)?/
+    ) ||
+    text.match(
+      /金.*?([\d,]+)\s*円.*?([+-−]\d[\d,]*)\s*円/
+    );
+
+  const dateMatch =
+    text.match(
+      /(\d{4}年\d{1,2}月\d{1,2}日\s*\d{1,2}:\d{2}公表)/
     );
 
   if (!priceMatch) {
-    throw new Error(
-      "現在価格解析失敗"
-    );
+    throw new Error("現在価格解析失敗");
   }
 
   return {
-    price:
-      toNumber(priceMatch[1]),
-    change:
-      toNumber(priceMatch[2])
+    source: "田中貴金属 店頭小売価格（税込）",
+    unit: "JPY / g",
+    updatedAt: dateMatch?.[1] ?? "",
+    latest: {
+      price: toNumber(priceMatch[1]),
+      change: toNumber(priceMatch[2])
+    }
   };
 }
 
-function createWeekRange(
-  latestPrice
-) {
-  const result = [];
+function extractNumbers(text) {
+  return [...String(text).matchAll(/[\d,]+(?:\.\d+)?/g)]
+    .map((match) => toNumber(match[0]))
+    .filter(Number.isFinite);
+}
 
-  for (
-    let i = 6;
-    i >= 0;
-    i--
-  ) {
-    const date =
-      new Date();
+function parseDateParts(text) {
+  const normalized = normalizeText(text);
 
-    date.setDate(
-      date.getDate() - i
+  const jpDate =
+    normalized.match(
+      /(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日/
     );
 
-    result.push({
-      label:
-        String(
-          date.getDate()
-        ),
-      date:
-        date
-          .toISOString()
-          .slice(0, 10),
-      price:
-        Math.round(
-          latestPrice *
-            (0.97 +
-              (6 - i) *
-                0.005)
-        )
-    });
+  if (jpDate) {
+    return {
+      year: Number(jpDate[1]),
+      month: Number(jpDate[2]),
+      day: Number(jpDate[3])
+    };
   }
 
-  result[
-    result.length - 1
-  ].price = latestPrice;
+  const slashDate =
+    normalized.match(
+      /(\d{4})[/-](\d{1,2})[/-](\d{1,2})/
+    );
 
-  return result;
+  if (slashDate) {
+    return {
+      year: Number(slashDate[1]),
+      month: Number(slashDate[2]),
+      day: Number(slashDate[3])
+    };
+  }
+
+  return null;
 }
 
-function createMonthRange(
-  latestPrice
-) {
-  const today =
-    new Date();
-
-  const days =
-    today.getDate();
-
-  const result = [];
-
-  for (
-    let day = 1;
-    day <= days;
-    day++
-  ) {
-    result.push({
-      label:
-        String(day),
-
-      date: `${today.getFullYear()}-${String(
-        today.getMonth() + 1
-      ).padStart(
-        2,
-        "0"
-      )}-${String(
-        day
-      ).padStart(
-        2,
-        "0"
-      )}`,
-
-      price:
-        Math.round(
-          latestPrice *
-            (0.95 +
-              day *
-                0.002)
-        )
-    });
-  }
-
-  result[
-    result.length - 1
-  ].price = latestPrice;
-
-  return result;
+function toDateKey({ year, month, day }) {
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-function createYearRange(
-  latestPrice
-) {
-  const result = [];
-  const now =
-    new Date();
-
-  for (
-    let i = 11;
-    i >= 0;
-    i--
-  ) {
-    const date =
-      new Date(
-        now.getFullYear(),
-        now.getMonth() -
-          i,
-        1
-      );
-
-    result.push({
-      label: `${
-        date.getMonth() +
-        1
-      }月`,
-
-      date: `${date.getFullYear()}-${String(
-        date.getMonth() + 1
-      ).padStart(
-        2,
-        "0"
-      )}`,
-
-      price:
-        Math.round(
-          latestPrice *
-            (0.8 +
-              (11 - i) *
-                0.015)
-        )
-    });
-  }
-
-  result[
-    result.length - 1
-  ].price = latestPrice;
-
-  return result;
+function toMonthKey(year, month) {
+  return `${year}-${String(month).padStart(2, "0")}`;
 }
 
-function create10YearRange(
-  latestPrice
-) {
-  const result = [];
-  const year =
-    new Date()
-      .getFullYear();
+function parseDailyHistory(html) {
+  const $ = cheerio.load(html);
 
-  for (
-    let y =
-      year - 9;
-    y <= year;
-    y++
-  ) {
-    result.push({
-      label:
-        String(y),
+  const items = [];
 
-      date:
-        String(y),
+  $("#price_trends tr, table.price_trends tr").each((_, row) => {
+    const dateText = $(row)
+      .find("td.date")
+      .text()
+      .trim();
 
-      price:
-        Math.round(
-          latestPrice *
-            (0.45 +
-              (y -
-                (year -
-                  9)) *
-                0.06)
-        )
+    const priceText = $(row)
+      .find("td.retail_tax")
+      .first()
+      .text()
+      .trim();
+
+    const dateMatch = dateText.match(/(\d{2})\.(\d{2})/);
+
+    if (!dateMatch) return;
+
+    const month = dateMatch[1];
+    const day = dateMatch[2];
+
+    const price = toNumber(priceText);
+
+    if (!price) return;
+
+    items.push({
+      label: String(Number(day)),
+      date: `${new Date().getFullYear()}-${month}-${day}`,
+      price
     });
+  });
+
+  return dedupeByDate(items).sort((a, b) =>
+    a.date.localeCompare(b.date)
+  );
+}
+
+function parseMonthlyHistory(html) {
+  const $ = cheerio.load(html);
+
+  const items = [];
+
+  let currentYear = "";
+
+  $("#price_trends_month_sp")
+    .children()
+    .each((_, element) => {
+
+      const el = $(element);
+
+      if (el.hasClass("year")) {
+        currentYear = el.text().replace("年", "").trim();
+      }
+
+      if (el.is("dl")) {
+
+        const months = el.find("dt.month");
+
+        months.each((index, monthNode) => {
+
+          const month =
+            $(monthNode)
+              .text()
+              .replace("月", "")
+              .trim()
+              .padStart(2, "0");
+
+          const dd =
+            $(monthNode).next("dd");
+
+          const averageText =
+            dd
+              .find("td.price_tanaka")
+              .last()
+              .text()
+              .replace(/,/g, "")
+              .trim();
+
+          const average =
+            Number(averageText);
+
+          if (!average) {
+            return;
+          }
+
+          items.push({
+            date: `${currentYear}-${month}`,
+            label: `${Number(month)}月`,
+            price: average
+          });
+        });
+      }
+    });
+
+  return items.sort(
+    (a, b) =>
+      a.date.localeCompare(b.date)
+  );
+}
+
+function parseYearlyHistory(html) {
+  const $ = cheerio.load(html);
+  const items = [];
+
+  $("tr").each((_, row) => {
+    const rowText = normalizeText(
+      $(row).find("th,td").text()
+    );
+
+    const yearMatch =
+      rowText.match(/\b(20\d{2}|19\d{2})\b/);
+
+    if (!yearMatch) return;
+
+    const year = yearMatch[1];
+
+    const prices = extractNumbers(rowText)
+      .filter((num) => num >= 1000 && num <= 100000);
+
+    const price = prices.at(-1);
+
+    if (!price) return;
+
+    items.push({
+      date: year,
+      label: year,
+      price
+    });
+  });
+
+  return dedupeByDate(items)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function dedupeByDate(items) {
+  const map = new Map();
+
+  for (const item of items) {
+    map.set(item.date, item);
   }
 
-  result[
-    result.length - 1
-  ].price = latestPrice;
+  return [...map.values()];
+}
 
-  return result;
+function takeLast(items, count) {
+  return items.slice(-count);
 }
 
 async function main() {
-  console.log(
-    "現在価格取得中..."
-  );
+  console.log("現在価格取得中...");
+  const latestHtml = await fetchHtml(URLS.latest);
+  const latest = parseLatest(latestHtml);
 
-  const html =
-    await fetchHtml(URL);
+  console.log("日次履歴取得中...");
+const dailyHtml = await fetchHtml(URLS.daily);
 
-  const latest =
-    parseLatest(html);
 
-  const data = {
-    source:
-      "田中貴金属 店頭小売価格（税込）",
 
-    unit:
-      "JPY / g",
 
-    generatedAt:
-      new Date().toISOString(),
 
-    latest,
+const daily = parseDailyHistory(dailyHtml);
 
-    ranges: {
-      "1W":
-        createWeekRange(
-          latest.price
-        ),
+  console.log("月次履歴取得中...");
+const monthlyHtml = await fetchHtml(URLS.monthly);
 
-      "1M":
-        createMonthRange(
-          latest.price
-        ),
 
-      "1Y":
-        createYearRange(
-          latest.price
-        ),
 
-      "10Y":
-        create10YearRange(
-          latest.price
-        )
-    }
-  };
 
-  await fs.mkdir(
-    "public",
-    {
-      recursive: true
-    }
-  );
+
+const monthly = parseMonthlyHistory(monthlyHtml);
+
+  console.log("年次履歴取得中...");
+  const yearlyHtml = await fetchHtml(URLS.yearly);
+  const yearly = parseYearlyHistory(yearlyHtml);
+
+  if (daily.length < 7) {
+    throw new Error(`日次履歴が不足: ${daily.length}件`);
+  }
+
+  if (monthly.length < 12) {
+    throw new Error(`月次履歴が不足: ${monthly.length}件`);
+  }
+
+  if (yearly.length < 10) {
+    throw new Error(`年次履歴が不足: ${yearly.length}件`);
+  }
+
+const data = {
+  ...latest,
+  generatedAt: new Date().toISOString(),
+  ranges: {
+    "1W": takeLast(daily, 7),
+    "1M": daily,
+    "1Y": takeLast(monthly, 12),
+    "10Y": takeLast(yearly, 10)
+  }
+};
+
+  await fs.mkdir("public", {
+    recursive: true
+  });
 
   await fs.writeFile(
     OUT_PATH,
-    JSON.stringify(
-      data,
-      null,
-      2
-    ),
+    JSON.stringify(data, null, 2),
     "utf-8"
   );
 
   console.log(
-    `gold.json overwritten: ¥${latest.price.toLocaleString()}`
+    `gold.json overwritten: ¥${latest.latest.price.toLocaleString()}`
   );
 
   console.log(
@@ -336,11 +354,7 @@ async function main() {
   );
 }
 
-main().catch(
-  (error) => {
-    console.error(
-      error
-    );
-    process.exit(1);
-  }
-);
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
