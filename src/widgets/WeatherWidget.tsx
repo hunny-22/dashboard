@@ -125,94 +125,78 @@ export default function WeatherWidget() {
   useEffect(() => {
     let ignore = false;
 
-    async function loadWeather() {
-      try {
-        setError("");
+async function loadWeather() {
+  try {
+    setError("");
 
-const url =
-  `https://api.open-meteo.com/v1/forecast` +
-  `?latitude=${selectedCity.latitude}` +
-  `&longitude=${selectedCity.longitude}` +
-  `&current=temperature_2m,weather_code` +
-  `&hourly=temperature_2m,weather_code` +
-  `&forecast_days=1` +
-  `&timezone=Asia%2FTokyo`;
+    const url =
+      `https://api.open-meteo.com/v1/forecast` +
+      `?latitude=${selectedCity.latitude}` +
+      `&longitude=${selectedCity.longitude}` +
+      `&current=temperature_2m,weather_code` +
+      `&hourly=temperature_2m,weather_code` +
+      `&forecast_days=1` +
+      `&timezone=Asia%2FTokyo`;
 
-        const res = await fetch(url);
-const data = await res.json();
+    const res = await fetch(url);
 
-console.log("weather data", data);
-
-const temp =
-  data.current?.temperature_2m ??
-  data.current_weather?.temperature ??
-  data.hourly?.temperature_2m?.[0] ??
-  null;
-
-const code =
-  data.current?.weather_code ??
-  data.current_weather?.weathercode ??
-  data.hourly?.weather_code?.[0] ??
-  null;
-
-console.log("temp", temp);
-console.log("code", code);
-
-
-        if (ignore) return;
-
-if (ignore) return;
-
-if (typeof temp === "number") {
-  setTemperature(temp);
-}
-
-if (typeof code === "number") {
-  setWeatherCode(code);
-}
-
-if (
-  typeof temp !== "number" &&
-  typeof code !== "number"
-) {
-  throw new Error(
-    "天気データの形式が不正"
-  );
-}
-
-setLastUpdated(
-  new Date().toLocaleTimeString(
-    "ja-JP",
-    {
-      hour: "2-digit",
-      minute: "2-digit"
+    if (!res.ok) {
+      throw new Error("天気API取得失敗");
     }
-  )
-);
 
-        setTemperature(temp);
-        setWeatherCode(code);
+    const data = await res.json();
 
-        setLastUpdated(
-          new Date().toLocaleTimeString(
-            "ja-JP",
-            {
-              hour: "2-digit",
-              minute: "2-digit"
-            }
-          )
-        );
-      } catch (error) {
-        if (ignore) return;
+    const temp =
+      data.current?.temperature_2m ??
+      data.current_weather?.temperature ??
+      data.hourly?.temperature_2m?.[0];
 
-        console.log(
-          "天気取得エラー",
-          error
-        );
+    const code =
+      data.current?.weather_code ??
+      data.current_weather?.weathercode ??
+      data.hourly?.weather_code?.[0];
 
-        setError("");
-      }
+    if (ignore) return;
+
+    if (typeof temp === "number") {
+      setTemperature(temp);
     }
+
+    if (typeof code === "number") {
+      setWeatherCode(code);
+    }
+
+    if (
+      typeof temp !== "number" &&
+      typeof code !== "number"
+    ) {
+      throw new Error(
+        "天気データの形式が不正"
+      );
+    }
+
+    setLastUpdated(
+      new Date().toLocaleTimeString(
+        "ja-JP",
+        {
+          hour: "2-digit",
+          minute: "2-digit"
+        }
+      )
+    );
+  } catch (error) {
+    if (ignore) return;
+
+    console.log(
+      "天気取得エラー",
+      error
+    );
+
+    // ここでは temperature/weatherCode を消さない
+    // 前回成功した表示を残す
+    setError("");
+  }
+}
 
     loadWeather();
 
