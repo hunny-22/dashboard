@@ -16,9 +16,14 @@ const cities = [
     longitude: 135.4333
   },
   {
-    name: "東京都新宿区",
-    latitude: 35.6896,
-    longitude: 139.7006
+    name: "東京都港区",
+    latitude: 35.6581,
+    longitude: 139.7516
+  },
+  {
+    name: "神奈川県横須賀市",
+    latitude: 35.2810,
+    longitude: 139.6722
   },
   {
     name: "北海道札幌市",
