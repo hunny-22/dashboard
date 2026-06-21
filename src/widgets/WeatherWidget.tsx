@@ -383,13 +383,23 @@ const tempStyle = {
   marginTop: "10px",
   fontSize:
     "clamp(1.5rem, 4vw, 2.5rem)",
-  fontWeight: "bold"
+  fontWeight: "bold",
+  lineHeight: 1
 };
 
 const labelStyle = {
+  marginTop: "8px",
+  display: "inline-block",
+  padding: "4px 12px",
+  borderRadius: "999px",
+  background:
+    "rgba(255,255,255,0.06)",
+  border:
+    "1px solid rgba(255,255,255,0.08)",
   fontSize:
-    "clamp(0.75rem, 2vw, 1rem)",
-  opacity: 0.7
+    "clamp(0.8rem, 1.8vw, 1rem)",
+  fontWeight: "bold",
+  opacity: 0.85
 };
 
 const updatedStyle = {
