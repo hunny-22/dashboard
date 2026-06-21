@@ -39,7 +39,6 @@ async function fetchHtml(url) {
   }
 
   const buffer = await res.arrayBuffer();
-
   const utf8 = new TextDecoder("utf-8").decode(buffer);
 
   if (utf8.includes("金") || utf8.includes("円")) {
@@ -47,6 +46,56 @@ async function fetchHtml(url) {
   }
 
   return new TextDecoder("shift_jis").decode(buffer);
+}
+
+function extractNumbers(text) {
+  return [...String(text).matchAll(/[\d,]+(?:\.\d+)?/g)]
+    .map((match) => toNumber(match[0]))
+    .filter(Number.isFinite);
+}
+
+function isValidGoldPrice(price) {
+  return (
+    Number.isFinite(price) &&
+    price >= 1000 &&
+    price <= 100000
+  );
+}
+
+function pickGoldPriceFromRow(text) {
+  const prices = extractNumbers(text).filter(isValidGoldPrice);
+
+  return prices.at(-1) ?? 0;
+}
+
+function dedupeByDate(items) {
+  const map = new Map();
+
+  for (const item of items) {
+    map.set(item.date, item);
+  }
+
+  return [...map.values()];
+}
+
+function toDateString(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function daysAgo(date, days) {
+  const copied = new Date(date);
+  copied.setDate(copied.getDate() - days);
+  return copied;
+}
+
+function monthsAgo(date, months) {
+  const copied = new Date(date);
+  copied.setMonth(copied.getMonth() - months);
+  return copied;
 }
 
 function parseLatest(html) {
@@ -65,10 +114,9 @@ function parseLatest(html) {
       /金.*?([\d,]+)\s*円.*?([+-−]\d[\d,]*)\s*円/
     );
 
-  const dateMatch =
-    text.match(
-      /(\d{4}年\d{1,2}月\d{1,2}日\s*\d{1,2}:\d{2}公表)/
-    );
+  const dateMatch = text.match(
+    /(\d{4}年\d{1,2}月\d{1,2}日\s*\d{1,2}:\d{2}公表)/
+  );
 
   if (!priceMatch) {
     throw new Error("現在価格解析失敗");
@@ -85,90 +133,68 @@ function parseLatest(html) {
   };
 }
 
-function extractNumbers(text) {
-  return [...String(text).matchAll(/[\d,]+(?:\.\d+)?/g)]
-    .map((match) => toNumber(match[0]))
-    .filter(Number.isFinite);
+function parseUpdatedAtDate(updatedAt) {
+  const match = String(updatedAt).match(
+    /(\d{4})年(\d{1,2})月(\d{1,2})日/
+  );
+
+  if (!match) return new Date();
+
+  return new Date(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3])
+  );
 }
 
-function dedupeByDate(items) {
-  const map = new Map();
-
-  for (const item of items) {
-    map.set(item.date, item);
-  }
-
-  return [...map.values()];
-}
-
-function takeLast(items, count) {
-  return items.slice(-count);
-}
-
-function guessDailyYear(month) {
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1;
+function guessDailyYear(month, anchorDate) {
+  const anchorYear = anchorDate.getFullYear();
+  const anchorMonth = anchorDate.getMonth() + 1;
   const targetMonth = Number(month);
 
-  /*
-   * ユラメモ♡
-   *
-   * 日次ページは 12.31 みたいに年が出ない。
-   * 1月に12月分を読むと、全部今年扱いになって壊れる。
-   * なので「今が1月で、取得月が12月」なら去年にする。
-   */
-  if (currentMonth === 1 && targetMonth === 12) {
-    return currentYear - 1;
+  if (targetMonth > anchorMonth) {
+    return anchorYear - 1;
   }
 
-  return currentYear;
+  return anchorYear;
 }
 
-function parseDailyHistory(html) {
+function parseDailyHistory(html, anchorDate) {
   const $ = cheerio.load(html);
-
   const items = [];
 
-  $("#price_trends tr, table.price_trends tr").each((_, row) => {
-    const dateText = $(row)
-      .find("td.date")
-      .text()
-      .trim();
+  $("#price_trends tr, table.price_trends tr, tr").each((_, row) => {
+    const rowText = normalizeText(
+      $(row).find("th,td").text()
+    );
 
-    const priceText = $(row)
-      .find("td.retail_tax")
-      .first()
-      .text()
-      .trim();
-
-    const dateMatch = dateText.match(/(\d{2})\.(\d{2})/);
+    const dateMatch =
+      rowText.match(/(\d{2})\.(\d{2})/) ||
+      rowText.match(/(\d{1,2})月(\d{1,2})日/);
 
     if (!dateMatch) return;
 
-    const month = dateMatch[1];
-    const day = dateMatch[2];
-    const year = guessDailyYear(month);
-
-    const price = toNumber(priceText);
+    const month = String(Number(dateMatch[1])).padStart(2, "0");
+    const day = String(Number(dateMatch[2])).padStart(2, "0");
+    const year = guessDailyYear(month, anchorDate);
+    const price = pickGoldPriceFromRow(rowText);
 
     if (!price) return;
 
     items.push({
-      label: String(Number(day)),
       date: `${year}-${month}-${day}`,
+      label: `${Number(month)}/${Number(day)}`,
       price
     });
   });
 
-  return dedupeByDate(items).sort((a, b) =>
-    a.date.localeCompare(b.date)
-  );
+  return dedupeByDate(items)
+    .filter((item) => isValidGoldPrice(item.price))
+    .sort((a, b) => a.date.localeCompare(b.date));
 }
 
 function parseMonthlyHistory(html) {
   const $ = cheerio.load(html);
-
   const items = [];
 
   let currentYear = "";
@@ -187,9 +213,7 @@ function parseMonthlyHistory(html) {
 
       if (!el.is("dl")) return;
 
-      const months = el.find("dt.month");
-
-      months.each((_, monthNode) => {
+      el.find("dt.month").each((_, monthNode) => {
         const month = $(monthNode)
           .text()
           .replace("月", "")
@@ -198,64 +222,122 @@ function parseMonthlyHistory(html) {
 
         const dd = $(monthNode).next("dd");
 
-        const averageText = dd
-          .find("td.price_tanaka")
-          .last()
-          .text()
-          .replace(/,/g, "")
-          .trim();
+        const rowText = normalizeText(
+          dd.text()
+        );
 
-        const average = Number(averageText);
+        const price = pickGoldPriceFromRow(rowText);
 
-        if (!average || !currentYear) return;
+        if (!currentYear || !price) return;
 
         items.push({
           date: `${currentYear}-${month}`,
           label: `${Number(month)}月`,
-          price: average
+          price
         });
       });
     });
 
-  return dedupeByDate(items).sort((a, b) =>
-    a.date.localeCompare(b.date)
-  );
+  return dedupeByDate(items)
+    .filter((item) => isValidGoldPrice(item.price))
+    .sort((a, b) => a.date.localeCompare(b.date));
 }
 
 function parseYearlyHistory(html) {
   const $ = cheerio.load(html);
-
   const items = [];
 
-  $("tr").each((_, row) => {
-    const rowText = normalizeText(
-      $(row).find("th,td").text()
-    );
+  $("#price_trends_year_sp dt").each((_, dt) => {
+    const yearText = $(dt)
+      .text()
+      .trim();
 
-    const yearMatch =
-      rowText.match(/\b(20\d{2}|19\d{2})\b/);
+    const yearMatch = yearText.match(/(\d{4})年/);
 
     if (!yearMatch) return;
 
     const year = yearMatch[1];
 
-    const prices = extractNumbers(rowText)
-      .filter((num) => num >= 1000 && num <= 100000);
+    const dd = $(dt).next("dd");
 
-    const price = prices.at(-1);
+    let averagePrice = 0;
 
-    if (!price) return;
+    dd.find("table.price tr").each((_, row) => {
+      const score = $(row)
+        .find(".price_score")
+        .text()
+        .trim();
+
+      if (score !== "平均") return;
+
+      const priceText = $(row)
+        .find(".price_tanaka")
+        .text()
+        .trim();
+
+      averagePrice = toNumber(priceText);
+    });
+
+    if (!averagePrice) return;
 
     items.push({
       date: year,
       label: year,
-      price
+      price: averagePrice
     });
   });
 
-  return dedupeByDate(items).sort((a, b) =>
-    a.date.localeCompare(b.date)
+  return dedupeByDate(items)
+    .filter((item) => isValidGoldPrice(item.price))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function filterDailyRange(items, startDate, endDate) {
+  const start = toDateString(startDate);
+  const end = toDateString(endDate);
+
+  return items.filter((item) =>
+    item.date >= start && item.date <= end
   );
+}
+
+function buildRanges({ daily, monthly, yearly }) {
+  const cleanDaily = daily
+    .filter((item) => isValidGoldPrice(item.price))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const cleanMonthly = monthly
+    .filter((item) => isValidGoldPrice(item.price))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const cleanYearly = yearly
+    .filter((item) => isValidGoldPrice(item.price))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const dailyAnchor =
+    cleanDaily.length > 0
+      ? new Date(cleanDaily.at(-1).date)
+      : new Date();
+
+  const range1W = cleanDaily.slice(-7);
+
+  const range1M = cleanDaily.slice(-30);
+
+  return {
+    anchorDate: toDateString(dailyAnchor),
+    ranges: {
+      "1W": range1W,
+      "1M": range1M,
+      "1Y": cleanMonthly.slice(-12),
+      "10Y": cleanYearly.slice(-10)
+    }
+  };
+}
+
+function assertRange(name, items, min) {
+  if (items.length < min) {
+    throw new Error(`${name}履歴が不足: ${items.length}件`);
+  }
 }
 
 async function main() {
@@ -263,9 +345,16 @@ async function main() {
   const latestHtml = await fetchHtml(URLS.latest);
   const latest = parseLatest(latestHtml);
 
+  const latestDate = parseUpdatedAtDate(
+    latest.updatedAt
+  );
+
   console.log("日次履歴取得中...");
   const dailyHtml = await fetchHtml(URLS.daily);
-  const daily = parseDailyHistory(dailyHtml);
+  const daily = parseDailyHistory(
+    dailyHtml,
+    latestDate
+  );
 
   console.log("月次履歴取得中...");
   const monthlyHtml = await fetchHtml(URLS.monthly);
@@ -275,27 +364,30 @@ async function main() {
   const yearlyHtml = await fetchHtml(URLS.yearly);
   const yearly = parseYearlyHistory(yearlyHtml);
 
-  if (daily.length < 7) {
-    throw new Error(`日次履歴が不足: ${daily.length}件`);
-  }
+  console.log(
+    `daily:${daily.length} monthly:${monthly.length} yearly:${yearly.length}`
+  );
 
-  if (monthly.length < 12) {
-    throw new Error(`月次履歴が不足: ${monthly.length}件`);
-  }
+  console.log("daily first/last:", daily[0], daily.at(-1));
+  console.log("monthly first/last:", monthly[0], monthly.at(-1));
+  console.log("yearly first/last:", yearly[0], yearly.at(-1));
 
-  if (yearly.length < 10) {
-    throw new Error(`年次履歴が不足: ${yearly.length}件`);
-  }
+  const { anchorDate, ranges } = buildRanges({
+    daily,
+    monthly,
+    yearly
+  });
+
+  assertRange("週間", ranges["1W"], 2);
+  assertRange("月間", ranges["1M"], 2);
+  assertRange("年間", ranges["1Y"], 2);
+  assertRange("10年", ranges["10Y"], 2);
 
   const data = {
     ...latest,
     generatedAt: new Date().toISOString(),
-    ranges: {
-      "1W": takeLast(daily, 7),
-      "1M": daily,
-      "1Y": takeLast(monthly, 12),
-      "10Y": takeLast(yearly, 10)
-    }
+    anchorDate,
+    ranges
   };
 
   await fs.mkdir("public", {
@@ -313,7 +405,8 @@ async function main() {
   );
 
   console.log(
-    `1W:${data.ranges["1W"].length} ` +
+    `anchor:${data.anchorDate} ` +
+      `1W:${data.ranges["1W"].length} ` +
       `1M:${data.ranges["1M"].length} ` +
       `1Y:${data.ranges["1Y"].length} ` +
       `10Y:${data.ranges["10Y"].length}`

@@ -12,6 +12,7 @@ import {
 } from "recharts";
 
 const GOLD_REFRESH_TIME = 1000 * 60 * 30;
+const GOLD_STORAGE_KEY = "goldWidgetData";
 
 type RangeType = "10Y" | "1Y" | "1M" | "1W";
 
@@ -26,6 +27,7 @@ type GoldData = {
   unit: string;
   updatedAt?: string;
   generatedAt: string;
+  anchorDate?: string;
   latest: {
     price: number;
     change: number;
@@ -47,6 +49,7 @@ const fallbackGoldData: GoldData = {
   source: "読み込み前",
   unit: "JPY / g",
   generatedAt: "",
+  anchorDate: "",
   latest: {
     price: 0,
     change: 0
@@ -58,6 +61,19 @@ const fallbackGoldData: GoldData = {
     "1W": []
   }
 };
+
+function loadSavedGoldData() {
+  const saved =
+    localStorage.getItem(GOLD_STORAGE_KEY);
+
+  if (!saved) return fallbackGoldData;
+
+  try {
+    return JSON.parse(saved) as GoldData;
+  } catch {
+    return fallbackGoldData;
+  }
+}
 
 function formatYen(value: number) {
   return `¥${Math.round(value).toLocaleString()}`;
@@ -71,18 +87,77 @@ function formatShortYen(value: number) {
   return `${Math.round(value)}`;
 }
 
+function isValidGoldPrice(price: number) {
+  return (
+    Number.isFinite(price) &&
+    price >= 1000 &&
+    price <= 100000
+  );
+}
+
+function getTickIndexes(length: number, range: RangeType) {
+  if (length <= 0) return [];
+
+  if (range === "1W" || range === "10Y") {
+    return Array.from(
+      { length },
+      (_, index) => index
+    );
+  }
+
+  if (range === "1M" || range === "1Y") {
+    return [
+      0,
+      Math.floor(length * 0.25),
+      Math.floor(length * 0.5),
+      Math.floor(length * 0.75),
+      length - 1
+    ];
+  }
+
+  return [
+    0,
+    Math.floor(length * 0.5),
+    length - 1
+  ];
+}
+
+function getRangeDescription(
+  range: RangeType,
+  count: number
+) {
+  if (range === "1W") {
+    return `直近${count}営業日`;
+  }
+
+  if (range === "1M") {
+    return `直近${count}営業日`;
+  }
+
+  if (range === "1Y") {
+    return `直近${count}か月`;
+  }
+
+  return `直近${count}年`;
+}
+
 export default function GoldWidget() {
   const [range, setRange] =
     useState<RangeType>("1W");
 
   const [goldData, setGoldData] =
-    useState<GoldData>(fallbackGoldData);
+    useState<GoldData>(() =>
+      loadSavedGoldData()
+    );
 
   const [error, setError] =
     useState("");
 
   const [loadedAt, setLoadedAt] =
     useState("");
+
+  const [isUpdating, setIsUpdating] =
+  useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -91,13 +166,6 @@ export default function GoldWidget() {
       try {
         setError("");
 
-        /*
-         * ユラメモ♡
-         *
-         * GitHub Pagesでは /dashboard/ 配下で公開される。
-         * /gold.json だと github.io 直下を見に行くので、
-         * Viteの BASE_URL を使って正しい場所から読む。
-         */
         const res = await fetch(
           `${import.meta.env.BASE_URL}gold.json?time=${Date.now()}`
         );
@@ -114,6 +182,11 @@ export default function GoldWidget() {
         if (ignore) return;
 
         setGoldData(data);
+
+        localStorage.setItem(
+          GOLD_STORAGE_KEY,
+          JSON.stringify(data)
+        );
 
         setLoadedAt(
           new Date().toLocaleTimeString(
@@ -144,13 +217,102 @@ export default function GoldWidget() {
     };
   }, []);
 
+async function handleManualUpdate() {
+  try {
+    setIsUpdating(true);
+    setError("");
+
+    const updateRes = await fetch(
+      "http://localhost:8787/update-gold",
+      {
+        method: "POST"
+      }
+    );
+
+    if (!updateRes.ok) {
+      throw new Error(
+        "金相場更新失敗"
+      );
+    }
+
+    const result = await updateRes.json();
+
+    if (!result.ok || !result.data) {
+      throw new Error(
+        "金相場更新結果取得失敗"
+      );
+    }
+
+    const data: GoldData =
+      result.data;
+
+    setGoldData(data);
+
+    localStorage.setItem(
+      GOLD_STORAGE_KEY,
+      JSON.stringify(data)
+    );
+
+    setLoadedAt(
+      new Date().toLocaleTimeString(
+        "ja-JP",
+        {
+          hour: "2-digit",
+          minute: "2-digit"
+        }
+      )
+    );
+  } catch (error) {
+    console.error(error);
+    setError("更新失敗");
+  } finally {
+    setIsUpdating(false);
+  }
+}
+
   const history = useMemo(() => {
-    return goldData.ranges[range] ?? [];
+    const raw =
+      goldData.ranges[range] ?? [];
+
+    if (range === "1W") {
+      return raw.slice(-7);
+    }
+
+    if (range === "1M") {
+      return raw.slice(-30);
+    }
+
+    if (range === "1Y") {
+      return raw.slice(-12);
+    }
+
+    return raw.slice(-10);
   }, [goldData, range]);
+
+  const chartData = useMemo(() => {
+    return history
+      .filter((item) =>
+        isValidGoldPrice(Number(item.price))
+      )
+      .map((item, index) => ({
+        ...item,
+        chartX:
+          item.date ??
+          `${index}-${item.label}`,
+        price: Number(item.price)
+      }));
+  }, [history]);
+
+  const tickIndexes = useMemo(() => {
+    return getTickIndexes(
+      chartData.length,
+      range
+    );
+  }, [chartData.length, range]);
 
   const stats = useMemo(() => {
     const prices =
-      history.map((item) => item.price);
+      chartData.map((item) => item.price);
 
     if (prices.length === 0) {
       return {
@@ -163,9 +325,9 @@ export default function GoldWidget() {
     return {
       min: Math.min(...prices),
       max: Math.max(...prices),
-      base: history[0].price
+      base: chartData[0].price
     };
-  }, [history]);
+  }, [chartData]);
 
   const latestPrice =
     goldData.latest.price;
@@ -182,6 +344,12 @@ export default function GoldWidget() {
       : (change / previousPrice) * 100;
 
   const isPlus = change >= 0;
+
+  const rangeDescription =
+    getRangeDescription(
+      range,
+      chartData.length
+    );
 
   return (
     <div style={containerStyle}>
@@ -213,6 +381,20 @@ export default function GoldWidget() {
               {option.label}
             </button>
           ))}
+
+<button
+  onClick={handleManualUpdate}
+  disabled={isUpdating}
+  style={{
+    ...rangeButtonStyle,
+    opacity: isUpdating ? 0.5 : 1
+  }}
+>
+  {isUpdating
+    ? "更新中..."
+    : "更新"}
+</button>
+
         </div>
       </div>
 
@@ -258,18 +440,23 @@ export default function GoldWidget() {
       </div>
 
       <div style={chartHeaderStyle}>
-        <span>価格推移</span>
-        <span>Y: 金額 / X: 期間</span>
+        <span>
+          価格推移 / {rangeDescription}
+        </span>
+
+        <span>
+          右端 {goldData.anchorDate || "--"}
+        </span>
       </div>
 
       <div style={chartAreaStyle}>
-        {history.length > 0 ? (
+        {chartData.length > 0 ? (
           <ResponsiveContainer
             width="100%"
             height={180}
           >
             <LineChart
-              data={history}
+              data={chartData}
               margin={{
                 top: 8,
                 right: 10,
@@ -284,7 +471,7 @@ export default function GoldWidget() {
               />
 
               <XAxis
-                dataKey="label"
+                dataKey="chartX"
                 tick={{
                   fill: "rgba(255,255,255,0.48)",
                   fontSize: 10
@@ -293,9 +480,14 @@ export default function GoldWidget() {
                   stroke: "rgba(255,255,255,0.25)"
                 }}
                 tickLine={false}
-                interval={
-                  range === "1M" ? 2 : 0
-                }
+                interval={0}
+                tickFormatter={(_, index) => {
+                  if (!tickIndexes.includes(index)) {
+                    return "";
+                  }
+
+                  return chartData[index]?.label ?? "";
+                }}
               />
 
               <YAxis
@@ -309,15 +501,21 @@ export default function GoldWidget() {
                 tickLine={false}
                 tickFormatter={formatShortYen}
                 domain={[
-                  "dataMin",
-                  "dataMax"
+                  (dataMin: number) =>
+                    Math.floor(dataMin * 0.995),
+                  (dataMax: number) =>
+                    Math.ceil(dataMax * 1.005)
                 ]}
+                allowDecimals={false}
                 width={42}
               />
 
               <Tooltip
                 contentStyle={tooltipStyle}
                 labelStyle={tooltipLabelStyle}
+                labelFormatter={(_, payload) =>
+                  payload?.[0]?.payload?.label ?? ""
+                }
                 formatter={(value) => [
                   formatYen(Number(value)),
                   "価格"
@@ -332,15 +530,6 @@ export default function GoldWidget() {
                 />
               )}
 
-              {/*
-               * ユラメモ♡
-               *
-               * RechartsのResponsiveContainerは、
-               * 親要素の高さが曖昧だと width(-1) height(-1) になる。
-               *
-               * なので height={180} と chartAreaStyle の固定heightで安定化。
-               * 線は type="linear" で折れ線。
-               */}
               <Line
                 type="linear"
                 dataKey="price"

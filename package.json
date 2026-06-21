@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "update:gold": "node ./scripts/updateGold.mjs"
+    "update:gold": "node ./scripts/updateGold.mjs",
+    "gold:server": "node ./scripts/goldServer.mjs"
   },
   "dependencies": {
     "cheerio": "^1.2.0",
