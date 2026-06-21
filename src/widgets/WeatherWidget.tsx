@@ -151,6 +151,9 @@ export default function WeatherWidget() {
         : ""
     );
 
+    const [refreshKey, setRefreshKey] =
+    useState(0);
+
   useEffect(() => {
     localStorage.setItem(
       WEATHER_CITY_STORAGE_KEY,
@@ -273,7 +276,7 @@ export default function WeatherWidget() {
       ignore = true;
       clearInterval(timer);
     };
-  }, [city, temperature, weatherCode]);
+    }, [city, refreshKey]);
 
   return (
     <div style={weatherStyle}>
@@ -287,10 +290,6 @@ export default function WeatherWidget() {
           : "--℃"}
       </div>
 
-      <div style={cityStyle}>
-        {city}
-      </div>
-
       <div style={labelStyle}>
         {error || getWeatherLabel(weatherCode)}
       </div>
@@ -300,6 +299,17 @@ export default function WeatherWidget() {
           {lastUpdated} 更新
         </div>
       )}
+
+            <button
+        onClick={() => {
+          setRefreshKey(
+            (value) => value + 1
+          );
+        }}
+        style={refreshButtonStyle}
+      >
+        ↻ 更新
+      </button>
 
       <select
         value={city}
@@ -340,13 +350,6 @@ const tempStyle = {
   fontWeight: "bold"
 };
 
-const cityStyle = {
-  marginTop: "8px",
-  fontSize:
-    "clamp(0.75rem, 2vw, 1rem)",
-  opacity: 0.7
-};
-
 const labelStyle = {
   fontSize:
     "clamp(0.75rem, 2vw, 1rem)",
@@ -357,6 +360,18 @@ const updatedStyle = {
   marginTop: "4px",
   fontSize: "0.75rem",
   opacity: 0.5
+};
+
+const refreshButtonStyle = {
+  marginTop: "10px",
+  padding: "6px 14px",
+  borderRadius: "999px",
+  border: "1px solid #3f3f46",
+  background:
+    "rgba(255,255,255,0.04)",
+  color: "#e5e7eb",
+  cursor: "pointer",
+  fontSize: "0.8rem"
 };
 
 const selectStyle = {
