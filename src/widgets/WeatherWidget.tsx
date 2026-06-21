@@ -6,6 +6,9 @@ const WEATHER_REFRESH_TIME =
 const WEATHER_CITY_STORAGE_KEY =
   "weatherCity";
 
+const WEATHER_DATA_STORAGE_KEY =
+  "weatherData";
+
 const cities = [
   {
     name: "大阪府和泉市",
@@ -29,14 +32,51 @@ const cities = [
   }
 ];
 
+type SavedWeatherData = {
+  city: string;
+  temperature: number | null;
+  weatherCode: number | null;
+  lastUpdated: string;
+};
+
+function loadSavedWeatherData() {
+  const saved = localStorage.getItem(
+    WEATHER_DATA_STORAGE_KEY
+  );
+
+  if (!saved) return null;
+
+  try {
+    return JSON.parse(saved) as SavedWeatherData;
+  } catch {
+    return null;
+  }
+}
+
 function getWeatherIcon(code: number | null) {
   if (code === null) return "？";
   if (code === 0) return "☀";
   if ([1, 2, 3].includes(code)) return "☁";
   if ([45, 48].includes(code)) return "🌫";
-  if ([51, 53, 55, 61, 63, 65, 80, 81, 82].includes(code)) return "🌧";
-  if ([71, 73, 75, 77, 85, 86].includes(code)) return "❄";
+
+  if (
+    [
+      51, 53, 55, 61, 63, 65, 80, 81, 82
+    ].includes(code)
+  ) {
+    return "🌧";
+  }
+
+  if (
+    [
+      71, 73, 75, 77, 85, 86
+    ].includes(code)
+  ) {
+    return "❄";
+  }
+
   if ([95, 96, 99].includes(code)) return "⛈";
+
   return "☁";
 }
 
@@ -47,31 +87,63 @@ function getWeatherLabel(code: number | null) {
   if (code === 3) return "くもり";
   if ([45, 48].includes(code)) return "霧";
   if ([51, 53, 55].includes(code)) return "霧雨";
-  if ([61, 63, 65, 80, 81, 82].includes(code)) return "雨";
-  if ([71, 73, 75, 77, 85, 86].includes(code)) return "雪";
+
+  if (
+    [
+      61, 63, 65, 80, 81, 82
+    ].includes(code)
+  ) {
+    return "雨";
+  }
+
+  if (
+    [
+      71, 73, 75, 77, 85, 86
+    ].includes(code)
+  ) {
+    return "雪";
+  }
+
   if ([95, 96, 99].includes(code)) return "雷雨";
+
   return "くもり";
 }
 
 export default function WeatherWidget() {
   const [city, setCity] = useState(() => {
     return (
-      localStorage.getItem(WEATHER_CITY_STORAGE_KEY) ??
-      "大阪府和泉市"
+      localStorage.getItem(
+        WEATHER_CITY_STORAGE_KEY
+      ) ?? "大阪府和泉市"
     );
   });
 
+  const savedWeather =
+    loadSavedWeatherData();
+
   const [temperature, setTemperature] =
-    useState<number | null>(null);
+    useState<number | null>(
+      savedWeather?.city === city
+        ? savedWeather.temperature
+        : null
+    );
 
   const [weatherCode, setWeatherCode] =
-    useState<number | null>(null);
+    useState<number | null>(
+      savedWeather?.city === city
+        ? savedWeather.weatherCode
+        : null
+    );
 
   const [error, setError] =
     useState("");
 
   const [lastUpdated, setLastUpdated] =
-    useState("");
+    useState(
+      savedWeather?.city === city
+        ? savedWeather.lastUpdated
+        : ""
+    );
 
   useEffect(() => {
     localStorage.setItem(
@@ -119,11 +191,17 @@ export default function WeatherWidget() {
           data.hourly?.weather_code?.[0] ??
           null;
 
-        console.log("weather data", data);
-        console.log("temp", temp);
-        console.log("code", code);
-
         if (ignore) return;
+
+        const nextTemperature =
+          typeof temp === "number"
+            ? temp
+            : temperature;
+
+        const nextWeatherCode =
+          typeof code === "number"
+            ? code
+            : weatherCode;
 
         if (typeof temp === "number") {
           setTemperature(temp);
@@ -137,29 +215,43 @@ export default function WeatherWidget() {
           typeof temp !== "number" &&
           typeof code !== "number"
         ) {
-          throw new Error("天気データの形式が不正");
+          throw new Error(
+            "天気データの形式が不正"
+          );
         }
 
-        setError("");
-
-        setLastUpdated(
+        const updatedAt =
           new Date().toLocaleTimeString(
             "ja-JP",
             {
               hour: "2-digit",
               minute: "2-digit"
             }
-          )
+          );
+
+        setError("");
+        setLastUpdated(updatedAt);
+
+        localStorage.setItem(
+          WEATHER_DATA_STORAGE_KEY,
+          JSON.stringify({
+            city,
+            temperature: nextTemperature,
+            weatherCode: nextWeatherCode,
+            lastUpdated: updatedAt
+          })
         );
       } catch (error) {
         if (ignore) return;
 
-        console.log("天気取得エラー", error);
+        console.log(
+          "天気取得エラー",
+          error
+        );
 
         /*
          * 失敗しても前回表示を消さない。
-         * ここで temperature/weatherCode を null に戻すと、
-         * 更新タイミングで "--℃" や "取得中" に戻る。
+         * F5や高速更新で "--℃" に戻るのを防ぐ。
          */
         setError("");
       }
@@ -175,7 +267,7 @@ export default function WeatherWidget() {
       ignore = true;
       clearInterval(timer);
     };
-  }, [city]);
+  }, [city, temperature, weatherCode]);
 
   return (
     <div style={weatherStyle}>
