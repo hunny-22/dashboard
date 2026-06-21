@@ -129,21 +129,35 @@ export default function WeatherWidget() {
       try {
         setError("");
 
-        const url =
-          `https://api.open-meteo.com/v1/forecast` +
-          `?latitude=${selectedCity.latitude}` +
-          `&longitude=${selectedCity.longitude}` +
-          `&current=temperature_2m,weather_code` +
-          `&timezone=Asia%2FTokyo`;
+const url =
+  `https://api.open-meteo.com/v1/forecast` +
+  `?latitude=${selectedCity.latitude}` +
+  `&longitude=${selectedCity.longitude}` +
+  `&current=temperature_2m,weather_code` +
+  `&hourly=temperature_2m,weather_code` +
+  `&forecast_days=1` +
+  `&timezone=Asia%2FTokyo`;
 
         const res = await fetch(url);
-        const data = await res.json();
+const data = await res.json();
 
-        const temp =
-          data.current?.temperature_2m;
+console.log("weather data", data);
 
-        const code =
-          data.current?.weather_code;
+const temp =
+  data.current?.temperature_2m ??
+  data.current_weather?.temperature ??
+  data.hourly?.temperature_2m?.[0] ??
+  null;
+
+const code =
+  data.current?.weather_code ??
+  data.current_weather?.weathercode ??
+  data.hourly?.weather_code?.[0] ??
+  null;
+
+console.log("temp", temp);
+console.log("code", code);
+
 
         if (ignore) return;
 
