@@ -161,14 +161,34 @@ console.log("code", code);
 
         if (ignore) return;
 
-        if (
-          typeof temp !== "number" ||
-          typeof code !== "number"
-        ) {
-          throw new Error(
-            "天気データの形式が不正"
-          );
-        }
+if (ignore) return;
+
+if (typeof temp === "number") {
+  setTemperature(temp);
+}
+
+if (typeof code === "number") {
+  setWeatherCode(code);
+}
+
+if (
+  typeof temp !== "number" &&
+  typeof code !== "number"
+) {
+  throw new Error(
+    "天気データの形式が不正"
+  );
+}
+
+setLastUpdated(
+  new Date().toLocaleTimeString(
+    "ja-JP",
+    {
+      hour: "2-digit",
+      minute: "2-digit"
+    }
+  )
+);
 
         setTemperature(temp);
         setWeatherCode(code);
@@ -190,7 +210,7 @@ console.log("code", code);
           error
         );
 
-        setError("取得失敗");
+        setError("");
       }
     }
 
