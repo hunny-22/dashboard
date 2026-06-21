@@ -301,23 +301,36 @@ export default function WeatherWidget() {
       )}
 
             <button
-        onClick={() => {
-          setRefreshKey(
-            (value) => value + 1
-          );
-        }}
-        style={refreshButtonStyle}
-      >
-        ↻ 更新
-      </button>
+  type="button"
+  onMouseDown={(e) => {
+    e.stopPropagation();
+  }}
+  onClick={(e) => {
+    e.preventDefault();
+    e.stopPropagation();
 
-      <select
-        value={city}
-        onChange={(e) => {
-          setCity(e.target.value);
-        }}
-        style={selectStyle}
-      >
+    setRefreshKey(
+      (value) => value + 1
+    );
+  }}
+  style={refreshButtonStyle}
+>
+  ↻ 更新
+</button>
+
+<select
+  value={city}
+  onMouseDown={(e) => {
+    e.stopPropagation();
+  }}
+  onClick={(e) => {
+    e.stopPropagation();
+  }}
+  onChange={(e) => {
+    setCity(e.target.value);
+  }}
+  style={selectStyle}
+>
         {cities.map((cityItem) => (
           <option
             key={cityItem.name}
