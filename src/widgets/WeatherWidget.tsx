@@ -10,11 +10,7 @@ const WEATHER_DATA_STORAGE_KEY =
   "weatherData";
 
 const cities = [
-  {
-    name: "大阪府和泉市",
-    latitude: 34.4833,
-    longitude: 135.4333
-  },
+
   {
     name: "東京都港区",
     latitude: 35.6581,
@@ -29,6 +25,11 @@ const cities = [
     name: "北海道札幌市",
     latitude: 43.0618,
     longitude: 141.3545
+  },
+    {
+    name: "大阪府和泉市",
+    latitude: 34.4833,
+    longitude: 135.4333
   },
   {
     name: "福岡県福岡市",
