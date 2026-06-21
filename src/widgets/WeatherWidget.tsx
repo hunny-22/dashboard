@@ -151,8 +151,11 @@ export default function WeatherWidget() {
         : ""
     );
 
-    const [refreshKey, setRefreshKey] =
-    useState(0);
+const [refreshKey, setRefreshKey] =
+  useState(0);
+
+const [isRefreshing, setIsRefreshing] =
+  useState(false);
 
   useEffect(() => {
     localStorage.setItem(
@@ -300,7 +303,7 @@ export default function WeatherWidget() {
         </div>
       )}
 
-            <button
+<button
   type="button"
   onMouseDown={(e) => {
     e.stopPropagation();
@@ -309,13 +312,33 @@ export default function WeatherWidget() {
     e.preventDefault();
     e.stopPropagation();
 
+    setIsRefreshing(true);
+
     setRefreshKey(
       (value) => value + 1
     );
+
+    setTimeout(() => {
+      setIsRefreshing(false);
+    }, 1000);
   }}
-  style={refreshButtonStyle}
+  style={{
+    ...refreshButtonStyle,
+    ...(isRefreshing
+      ? {
+          background:
+            "rgba(250,204,21,0.35)",
+          transform:
+            "scale(0.96)",
+          boxShadow:
+            "0 0 18px rgba(250,204,21,0.5)"
+        }
+      : {})
+  }}
 >
-  ↻ 更新
+  {isRefreshing
+    ? "更新中..."
+    : "↻ 更新"}
 </button>
 
 <select
@@ -377,14 +400,17 @@ const updatedStyle = {
 
 const refreshButtonStyle = {
   marginTop: "10px",
-  padding: "6px 14px",
+  padding: "8px 18px",
   borderRadius: "999px",
-  border: "1px solid #3f3f46",
+  border: "1px solid #ca8a04",
   background:
-    "rgba(255,255,255,0.04)",
-  color: "#e5e7eb",
+    "rgba(250,204,21,0.12)",
+  color: "#facc15",
   cursor: "pointer",
-  fontSize: "0.8rem"
+  fontSize: "0.8rem",
+  fontWeight: "bold",
+  transition:
+    "all 0.15s ease"
 };
 
 const selectStyle = {
