@@ -1126,15 +1126,16 @@ function getResizeHandleStyle(
 }
 
 const homeStyle = {
-  width: "min(1400px, 95vw)",
-  height: "min(900px, 90vh)",
+  width: "100%",
+  maxWidth: "1400px",
+  height: "min(900px, 90dvh)",
   display: "grid",
   gridTemplateColumns:
     "repeat(8, minmax(0, 1fr))",
   gridTemplateRows:
     "repeat(8, minmax(0, 1fr))",
-  gap: "12px",
-  padding: "4px",
+  gap: "clamp(6px, 1.2vw, 12px)",
+  padding: "clamp(4px, 1vw, 8px)",
   boxSizing: "border-box" as const,
   overflow: "hidden",
   position: "relative" as const
@@ -1164,7 +1165,7 @@ const panelStyle = {
   justifyContent: "center",
   alignItems: "center",
   fontSize: "clamp(1rem, 2vw, 2rem)",
-  overflow: "visible",
+  overflow: "hidden",
   transition:
     "transform 0.2s ease, opacity 0.2s ease",
   zIndex: 2,
