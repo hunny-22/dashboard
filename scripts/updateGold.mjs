@@ -99,26 +99,49 @@ function monthsAgo(date, months) {
 }
 
 function parseLatest(html) {
-  const text = normalizeText(
-    cheerio.load(html).text()
-  );
+  const $ = cheerio.load(html);
 
-  const priceMatch =
-    text.match(
-      /金\s*店頭小売価格.*?([\d,]+)\s*円\s*\(?([+-−]?\d[\d,]*)\s*円?\)?/
-    ) ||
-    text.match(
-      /金\s*([\d,]+)\s*円\s*\(?([+-−]?\d[\d,]*)\s*円?\)?/
-    ) ||
-    text.match(
-      /金.*?([\d,]+)\s*円.*?([+-−]\d[\d,]*)\s*円/
-    );
+  const text = normalizeText($.text());
 
   const dateMatch = text.match(
     /(\d{4}年\d{1,2}月\d{1,2}日\s*\d{1,2}:\d{2}公表)/
   );
 
-  if (!priceMatch) {
+  let price = 0;
+  let change = 0;
+
+  $("tr").each((_, row) => {
+    const cells = $(row)
+      .find("th,td")
+      .map((_, cell) =>
+        normalizeText($(cell).text())
+      )
+      .get()
+      .filter(Boolean);
+
+    if (cells[0] !== "金") return;
+
+    const numbers = cells
+      .flatMap((cell) =>
+        [...cell.matchAll(/[+-−]?\d[\d,]*(?:\.\d+)?/g)].map(
+          (match) => toNumber(match[0])
+        )
+      )
+      .filter(Number.isFinite);
+
+    const retailPrice = numbers.find(
+      (num) => num >= 10000 && num <= 100000
+    );
+
+    const retailChange = numbers.find(
+      (num) => num !== retailPrice && Math.abs(num) < 10000
+    );
+
+    price = retailPrice ?? 0;
+    change = retailChange ?? 0;
+  });
+
+  if (!price) {
     throw new Error("現在価格解析失敗");
   }
 
@@ -127,8 +150,8 @@ function parseLatest(html) {
     unit: "JPY / g",
     updatedAt: dateMatch?.[1] ?? "",
     latest: {
-      price: toNumber(priceMatch[1]),
-      change: toNumber(priceMatch[2])
+      price,
+      change
     }
   };
 }
@@ -351,10 +374,55 @@ async function main() {
 
   console.log("日次履歴取得中...");
   const dailyHtml = await fetchHtml(URLS.daily);
-  const daily = parseDailyHistory(
-    dailyHtml,
-    latestDate
+const rawDaily = parseDailyHistory(
+  dailyHtml,
+  latestDate
+);
+
+const daily = mergeLatestIntoDaily(
+  rawDaily,
+  latest
+);
+
+  function mergeLatestIntoDaily(daily, latest) {
+  const latestDate = parseUpdatedAtDate(
+    latest.updatedAt
   );
+
+  const latestDateKey =
+    toDateString(latestDate);
+
+  const latestPoint = {
+    date: latestDateKey,
+    label:
+      `${latestDate.getMonth() + 1}/${latestDate.getDate()}`,
+    price: latest.latest.price
+  };
+
+  const map = new Map();
+
+  for (const item of daily) {
+    map.set(item.date, item);
+  }
+
+  const existing = map.get(latestDateKey);
+
+  if (!existing) {
+    map.set(latestDateKey, latestPoint);
+  } else {
+    map.set(latestDateKey, {
+      ...existing,
+      price: Math.max(
+        existing.price,
+        latestPoint.price
+      )
+    });
+  }
+
+  return [...map.values()].sort((a, b) =>
+    a.date.localeCompare(b.date)
+  );
+}
 
   console.log("月次履歴取得中...");
   const monthlyHtml = await fetchHtml(URLS.monthly);
