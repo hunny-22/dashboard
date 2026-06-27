@@ -8,6 +8,9 @@ on:
     # 日本時間 14:05
     - cron: "5 5 * * 1-5"
 
+    # 日本時間 17:15
+    - cron: "15 8 * * 1-5"
+
   workflow_dispatch:
 
 permissions:
