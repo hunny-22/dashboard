@@ -1,12 +1,12 @@
 {
   "source": "田中貴金属 店頭小売価格（税込）",
   "unit": "JPY / g",
-  "updatedAt": "2026年07月22日 14:00公表",
+  "updatedAt": "2026年07月22日 17:00公表",
   "latest": {
     "price": 23999,
     "change": 752
   },
-  "generatedAt": "2026-07-22T07:33:53.936Z",
+  "generatedAt": "2026-07-22T10:33:47.126Z",
   "anchorDate": "2026-07-22",
   "ranges": {
     "1W": [
